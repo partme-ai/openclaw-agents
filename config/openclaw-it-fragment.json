@@ -1,0 +1,113 @@
+{
+  "agents": {
+    "defaults": {
+      "model": { "primary": "YOUR_DEFAULT_MODEL" },
+      "compaction": { "mode": "safeguard" }
+    },
+    "list": [
+      {
+        "id": "technical-director",
+        "default": true,
+        "name": "技术总监",
+        "workspace": "~/.openclaw/workspace-it/technical-director",
+        "agentDir": "~/.openclaw/agents/technical-director/agent"
+      },
+      {
+        "id": "project-manager",
+        "name": "项目经理",
+        "workspace": "~/.openclaw/workspace-it/project-manager",
+        "agentDir": "~/.openclaw/agents/project-manager/agent"
+      },
+      {
+        "id": "product-manager",
+        "name": "产品经理",
+        "workspace": "~/.openclaw/workspace-it/product-manager",
+        "agentDir": "~/.openclaw/agents/product-manager/agent"
+      },
+      {
+        "id": "system-architect",
+        "name": "系统架构师",
+        "workspace": "~/.openclaw/workspace-it/system-architect",
+        "agentDir": "~/.openclaw/agents/system-architect/agent"
+      },
+      {
+        "id": "domain-expert",
+        "name": "领域专家",
+        "workspace": "~/.openclaw/workspace-it/domain-expert",
+        "agentDir": "~/.openclaw/agents/domain-expert/agent"
+      },
+      {
+        "id": "ux-designer",
+        "name": "UED设计师",
+        "workspace": "~/.openclaw/workspace-it/ux-designer",
+        "agentDir": "~/.openclaw/agents/ux-designer/agent"
+      },
+      {
+        "id": "ui-designer",
+        "name": "UI设计师",
+        "workspace": "~/.openclaw/workspace-it/ui-designer",
+        "agentDir": "~/.openclaw/agents/ui-designer/agent"
+      },
+      {
+        "id": "backend-engineer",
+        "name": "后端工程师",
+        "workspace": "~/.openclaw/workspace-it/backend-engineer",
+        "agentDir": "~/.openclaw/agents/backend-engineer/agent"
+      },
+      {
+        "id": "database-engineer",
+        "name": "数据库工程师",
+        "workspace": "~/.openclaw/workspace-it/database-engineer",
+        "agentDir": "~/.openclaw/agents/database-engineer/agent"
+      },
+      {
+        "id": "frontend-engineer",
+        "name": "前端工程师",
+        "workspace": "~/.openclaw/workspace-it/frontend-engineer",
+        "agentDir": "~/.openclaw/agents/frontend-engineer/agent"
+      },
+      {
+        "id": "mobile-engineer",
+        "name": "移动开发工程师",
+        "workspace": "~/.openclaw/workspace-it/mobile-engineer",
+        "agentDir": "~/.openclaw/agents/mobile-engineer/agent"
+      },
+      {
+        "id": "qa-engineer",
+        "name": "测试工程师",
+        "workspace": "~/.openclaw/workspace-it/qa-engineer",
+        "agentDir": "~/.openclaw/agents/qa-engineer/agent"
+      },
+      {
+        "id": "ops-engineer",
+        "name": "运维工程师",
+        "workspace": "~/.openclaw/workspace-it/ops-engineer",
+        "agentDir": "~/.openclaw/agents/ops-engineer/agent"
+      }
+    ]
+  },
+  "bindings": [
+    { "agentId": "technical-director", "match": { "channel": "telegram" } },
+    { "agentId": "technical-director", "match": { "channel": "discord" } }
+  ],
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "technical-director",
+        "project-manager",
+        "product-manager",
+        "system-architect",
+        "domain-expert",
+        "ux-designer",
+        "ui-designer",
+        "backend-engineer",
+        "database-engineer",
+        "frontend-engineer",
+        "mobile-engineer",
+        "qa-engineer",
+        "ops-engineer"
+      ]
+    }
+  }
+}

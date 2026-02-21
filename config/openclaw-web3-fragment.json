@@ -1,0 +1,24 @@
+{
+  "agents": {
+    "defaults": {
+      "model": { "primary": "YOUR_DEFAULT_MODEL" },
+      "compaction": { "mode": "safeguard" }
+    },
+    "list": [
+      { "id": "chain-analyst", "default": true, "name": "链上分析师", "workspace": "~/.openclaw-web3/workspace-web3/chain-analyst", "agentDir": "~/.openclaw-web3/agents/chain-analyst/agent" },
+      { "id": "defi-scout", "name": "DeFi 侦察", "workspace": "~/.openclaw-web3/workspace-web3/defi-scout", "agentDir": "~/.openclaw-web3/agents/defi-scout/agent" },
+      { "id": "risk-monitor", "name": "风险监控", "workspace": "~/.openclaw-web3/workspace-web3/risk-monitor", "agentDir": "~/.openclaw-web3/agents/risk-monitor/agent" },
+      { "id": "portfolio-manager", "name": "组合管理", "workspace": "~/.openclaw-web3/workspace-web3/portfolio-manager", "agentDir": "~/.openclaw-web3/agents/portfolio-manager/agent" }
+    ]
+  },
+  "bindings": [
+    { "agentId": "chain-analyst", "match": { "channel": "telegram" } },
+    { "agentId": "chain-analyst", "match": { "channel": "discord" } }
+  ],
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [ "chain-analyst", "defi-scout", "risk-monitor", "portfolio-manager" ]
+    }
+  }
+}

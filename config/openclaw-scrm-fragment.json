@@ -1,0 +1,40 @@
+{
+  "agents": {
+    "defaults": {
+      "model": { "primary": "YOUR_DEFAULT_MODEL" },
+      "compaction": { "mode": "safeguard" }
+    },
+    "list": [
+      { "id": "scrm-orchestrator", "default": true, "name": "SCRM 运营编排", "workspace": "~/.openclaw-scrm/workspace-scrm/scrm-orchestrator", "agentDir": "~/.openclaw-scrm/agents/scrm-orchestrator/agent" },
+      { "id": "lead-gen", "name": "引流", "workspace": "~/.openclaw-scrm/workspace-scrm/lead-gen", "agentDir": "~/.openclaw-scrm/agents/lead-gen/agent" },
+      { "id": "acquisition", "name": "获客", "workspace": "~/.openclaw-scrm/workspace-scrm/acquisition", "agentDir": "~/.openclaw-scrm/agents/acquisition/agent" },
+      { "id": "customer-assets", "name": "客资", "workspace": "~/.openclaw-scrm/workspace-scrm/customer-assets", "agentDir": "~/.openclaw-scrm/agents/customer-assets/agent" },
+      { "id": "connection", "name": "建联", "workspace": "~/.openclaw-scrm/workspace-scrm/connection", "agentDir": "~/.openclaw-scrm/agents/connection/agent" },
+      { "id": "presale", "name": "售前客服", "workspace": "~/.openclaw-scrm/workspace-scrm/presale", "agentDir": "~/.openclaw-scrm/agents/presale/agent" },
+      { "id": "aftersale", "name": "售后客服", "workspace": "~/.openclaw-scrm/workspace-scrm/aftersale", "agentDir": "~/.openclaw-scrm/agents/aftersale/agent" },
+      { "id": "tech", "name": "技术客服", "workspace": "~/.openclaw-scrm/workspace-scrm/tech", "agentDir": "~/.openclaw-scrm/agents/tech/agent" },
+      { "id": "private-domain", "name": "私域", "workspace": "~/.openclaw-scrm/workspace-scrm/private-domain", "agentDir": "~/.openclaw-scrm/agents/private-domain/agent" }
+    ]
+  },
+  "bindings": [
+    { "agentId": "scrm-orchestrator", "match": { "channel": "telegram" } },
+    { "agentId": "scrm-orchestrator", "match": { "channel": "discord" } },
+    { "agentId": "scrm-orchestrator", "match": { "channel": "wecom-kf" } }
+  ],
+  "tools": {
+    "agentToAgent": {
+      "enabled": true,
+      "allow": [
+        "scrm-orchestrator",
+        "lead-gen",
+        "acquisition",
+        "customer-assets",
+        "connection",
+        "presale",
+        "aftersale",
+        "tech",
+        "private-domain"
+      ]
+    }
+  }
+}

@@ -354,6 +354,53 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 # 在 openclaw.json 中增加 copy 的 list 项，并修改 id/workspace/agentDir
 ```
 
+### 方法四：按 IT 片段用 openclaw agents add 添加智能体（与官方一致）
+
+与 [OpenClaw Multi-Agent](https://docs.openclaw.ai/concepts/multi-agent) 的 **Agent helper**、**Quick start** 一致：先用 `openclaw agents add <agentId>` 为每个角色创建独立 workspace、agentDir 和会话存储，再合并本仓库的配置片段得到 bindings 与 agent-to-agent。
+
+**1. 用向导逐个添加 IT 团队 13 个智能体**
+
+片段中的 `agentId` 与官方要求一致，可直接作为 `openclaw agents add` 的参数：
+
+```bash
+openclaw agents add technical-director
+openclaw agents add project-manager
+openclaw agents add product-manager
+openclaw agents add system-architect
+openclaw agents add domain-expert
+openclaw agents add ux-designer
+openclaw agents add ui-designer
+openclaw agents add backend-engineer
+openclaw agents add database-engineer
+openclaw agents add frontend-engineer
+openclaw agents add mobile-engineer
+openclaw agents add qa-engineer
+openclaw agents add ops-engineer
+```
+
+向导会为每个 id 创建 `~/.openclaw/workspace-<agentId>`、`~/.openclaw/agents/<agentId>/agent` 和 sessions；若希望统一放在 `workspace-it` 目录下，可在向导里填 `~/.openclaw/workspace-it/<agentId>`，或添加后再在配置里把 `workspace` 改为片段中的路径。
+
+**2. 合并片段中的 agents、bindings、tools.agentToAgent**
+
+将 `config/openclaw-it-fragment.json` 中的 `agents`（含 `defaults` 与 `list`）、`bindings`、`tools.agentToAgent` 合并进 `~/.openclaw/openclaw.json`。若已有 `agents.list`，把片段的 list 与现有 list 合并（按 id 去重或替换），并保留片段的 `bindings` 和 `tools.agentToAgent`，使 Telegram/Discord 入站路由到 technical-director、且编排者可委派到上述 12 个子角色。
+
+**3. 可选：使用本仓库 it/ 下的角色工作空间**
+
+本仓库 `it/` 目录下有针对各角色的 AGENTS.md、SOUL.md 等模板。可将对应子目录复制或链接到上述 workspace 路径，例如：
+
+```bash
+# 示例：技术总监工作空间指向仓库 it 目录
+cp -r /path/to/openclaw-agents/it/technical-director/* ~/.openclaw/workspace-it/technical-director/
+```
+
+**4. 重启并验证**
+
+```bash
+openclaw gateway restart
+openclaw agents list --bindings
+openclaw channels status --probe
+```
+
 ---
 
 ## 7. 配置智能体
@@ -373,6 +420,39 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 | `agentDir` | string | 是 | 状态目录，**禁止**多智能体共用 |
 | `model` | string | 否 | 默认模型 |
 
+### 智能体列表说明（以 openclaw-it-fragment 为例）
+
+本仓库 `config/openclaw-it-fragment.json` 定义了一个**软件开发团队**：1 个编排者 + 12 个子角色，共用同一 Gateway，通过 **bindings** 将入站渠道路由到默认入口，再经 **agent-to-agent** 委派到具体角色。
+
+**agents.defaults**（可选）：为所有智能体设置默认模型与压缩策略，例如：
+
+```json
+"defaults": {
+  "model": { "primary": "anthropic/claude-sonnet-4-5" },
+  "compaction": { "mode": "safeguard" }
+}
+```
+
+**agents.list**：每个智能体一项，必填 `id`、`workspace`、`agentDir`；`default: true` 表示未匹配到更具体 binding 时的回退智能体。用 CLI 逐个添加这 13 个智能体的步骤见 [§6 方法四：按 IT 片段用 openclaw agents add 添加智能体](#方法四按-it-片段用-openclaw-agents-add-添加智能体与官方一致)。IT 片段中 13 个智能体如下：
+
+| id | name | 说明 |
+|----|------|------|
+| technical-director | 技术总监 | 默认入口，编排者，可委派子角色 |
+| project-manager | 项目经理 | 项目管理、排期 |
+| product-manager | 产品经理 | 需求与产品 |
+| system-architect | 系统架构师 | 架构设计 |
+| domain-expert | 领域专家 | 业务与领域知识 |
+| ux-designer | UED设计师 | 体验设计 |
+| ui-designer | UI设计师 | 界面设计 |
+| backend-engineer | 后端工程师 | 后端开发 |
+| database-engineer | 数据库工程师 | 数据库与存储 |
+| frontend-engineer | 前端工程师 | 前端开发 |
+| mobile-engineer | 移动开发工程师 | 移动端开发 |
+| qa-engineer | 测试工程师 | 测试与质量 |
+| ops-engineer | 运维工程师 | 部署与运维 |
+
+**agent-to-agent**：IT 团队需编排者向子角色委派任务，故片段中设置 `tools.agentToAgent.enabled: true`，`allow` 列出 technical-director 及上述 12 个 id。详见 [OpenClaw Multi-Agent](https://docs.openclaw.ai/concepts/multi-agent)、[Channel routing](https://docs.openclaw.ai/channels/channel-routing)。
+
 ### 工作空间文件说明
 
 | 文件 | 用途 | 修改建议 |
@@ -385,9 +465,57 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 | `TOOLS.md` | 工具使用说明 | 修改工具配置 |
 | `IDENTITY.md` | 身份信息 | 可选 |
 
+**语言约定**：智能体描述文件（`AGENTS.md`、`SOUL.md`、`IDENTITY.md`）以**英文**为准，便于 OpenClaw 系统提示词注入与模型遵循。可选在同一目录下提供 `AGENTS.zh-CN.md`、`SOUL.zh-CN.md` 作中文对照（不参与注入，便于团队阅读）。参见 [OpenClaw System Prompt](https://docs.openclaw.ai/concepts/system-prompt)。
+
 ### 修改渠道绑定
 
 在 `bindings` 中按 `channel`、`accountId`、`peer` 等配置；见 [§4 智能体组（单网关内多智能体与路由）](#4-智能体组单网关内多智能体与路由)。
+
+### Channel 配置说明
+
+**渠道（Channel）** 即消息来源（WhatsApp、Telegram、Discord 等）。OpenClaw 通过 `channels` 配置登录与白名单，通过 **bindings** 将「某渠道 / 某账号 / 某会话」路由到指定智能体。参考 [OpenClaw Channel routing](https://docs.openclaw.ai/channels/channel-routing)、[Configuration examples](https://docs.openclaw.ai/gateway/configuration-examples)。
+
+**1. 配置渠道本身（channels）**
+
+在 `openclaw.json` 的 `channels` 下按渠道类型配置账号与权限，例如多账号 WhatsApp、Telegram 白名单：
+
+```json5
+{
+  "channels": {
+    "whatsapp": {
+      "allowFrom": ["+15555550123"],
+      "accounts": {
+        "personal": {},
+        "biz": { "authDir": "~/.openclaw/credentials/whatsapp/biz" }
+      }
+    },
+    "telegram": { "allowFrom": ["123456789"] },
+    "discord": {}
+  }
+}
+```
+
+- **allowFrom**：允许触发机器人的用户/群 ID 白名单，不配则按渠道默认策略。
+- **accounts**：多账号时每账号一个 key（如 personal、biz），对应一次 `openclaw channels login --channel whatsapp --account biz`。
+- 会话存储位于状态目录下 `agents/<agentId>/sessions/`，见 [Channel routing - Session storage](https://docs.openclaw.ai/channels/channel-routing)。
+
+**2. 将渠道路由到智能体（bindings）**
+
+`bindings` 数组每一项为 `{ agentId, match }`。`match` 最具体优先；常见写法：
+
+| 场景 | match 示例 | 说明 |
+|------|------------|------|
+| 某渠道全部进一个智能体 | `{ channel: "telegram" }` | IT 片段中 Telegram/Discord 均进 technical-director |
+| 多账号分智能体 | `{ channel: "whatsapp", accountId: "personal" }` | 按登录账号路由 |
+| 指定会话/群 | `{ channel: "whatsapp", peer: { kind: "direct", id: "+15551234567" } }` | 精确到会话 ID |
+
+**3. 验证渠道与绑定**
+
+```bash
+openclaw channels status          # 渠道连接状态
+openclaw channels status --probe  # 含探针（Telegram/Discord 等）
+openclaw agents list --bindings  # 智能体列表及绑定关系
+```
 
 ### 修改渠道配置
 
@@ -669,6 +797,8 @@ chmod 600 ~/.openclaw/agents/*/agent/auth-profiles.json
 ```
 
 垂直领域模板位于本仓库 `education/`、`wecom-kf/`、`partner/`、`product/`、`game/`、`web3/`，it 模板位于 `it/`；见 [§9 垂直领域示例](#9-垂直领域示例独立实例与智能体配置)。
+
+**共享项目目录（本机路径）**：本仓库 `it/` 下的 AGENTS.md 为**通用模板**，不包含本机专属的「共享项目目录」绝对路径。若需指定团队代码库路径（如 `/path/to/workspace-partme-ai`），应在**各智能体实际工作空间**（`~/.openclaw/workspace-<agentId>/AGENTS.md`）中单独添加或维护「Workspace & project directory」小节，便于不同机器使用不同路径。
 
 ### 智能体类型示例（以官方路径为准）
 

@@ -356,6 +356,52 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 # Add a new list entry for "copy" in openclaw.json and set id/workspace/agentDir
 ```
 
+### Method 4: Add IT team agents via openclaw agents add (matches official docs)
+
+This follows the [OpenClaw Multi-Agent](https://docs.openclaw.ai/concepts/multi-agent) **Agent helper** and **Quick start**: use `openclaw agents add <agentId>` for each role to create workspace, agentDir, and session store, then merge this repo’s config fragment for bindings and agent-to-agent.
+
+**1. Add all 13 IT agents with the wizard**
+
+The fragment’s `agentId` values are valid CLI arguments:
+
+```bash
+openclaw agents add technical-director
+openclaw agents add project-manager
+openclaw agents add product-manager
+openclaw agents add system-architect
+openclaw agents add domain-expert
+openclaw agents add ux-designer
+openclaw agents add ui-designer
+openclaw agents add backend-engineer
+openclaw agents add database-engineer
+openclaw agents add frontend-engineer
+openclaw agents add mobile-engineer
+openclaw agents add qa-engineer
+openclaw agents add ops-engineer
+```
+
+The wizard creates `~/.openclaw/workspace-<agentId>`, `~/.openclaw/agents/<agentId>/agent`, and sessions. To use a shared `workspace-it` dir, enter `~/.openclaw/workspace-it/<agentId>` in the wizard or set `workspace` in config to match the fragment.
+
+**2. Merge fragment into openclaw.json**
+
+Merge `agents` (including `defaults` and `list`), `bindings`, and `tools.agentToAgent` from `config/openclaw-it-fragment.json` into `~/.openclaw/openclaw.json`. If you already have `agents.list`, merge the fragment list (by id) and keep the fragment’s `bindings` and `tools.agentToAgent` so Telegram/Discord route to technical-director and the orchestrator can delegate to the 12 roles.
+
+**3. Optional: use this repo’s it/ workspace templates**
+
+The repo’s `it/` directory has AGENTS.md, SOUL.md, etc. per role. Copy or link into your workspace paths, e.g.:
+
+```bash
+cp -r /path/to/openclaw-agents/it/technical-director/* ~/.openclaw/workspace-it/technical-director/
+```
+
+**4. Restart and verify**
+
+```bash
+openclaw gateway restart
+openclaw agents list --bindings
+openclaw channels status --probe
+```
+
 ---
 
 ## 7. Configuring Agents
@@ -375,6 +421,39 @@ Main config: `~/.openclaw/openclaw.json` (JSON5). Override with `OPENCLAW_CONFIG
 | `agentDir` | string | Yes | State directory; **must not** be shared across agents |
 | `model` | string | No | Default model |
 
+### Agent list (openclaw-it-fragment example)
+
+The repo’s `config/openclaw-it-fragment.json` defines a **software dev team**: one orchestrator plus 12 roles, all on the same gateway. Inbound traffic is routed to the default agent via **bindings**, then **agent-to-agent** is used to delegate to specific roles.
+
+**agents.defaults** (optional): shared default model and compaction for all agents, e.g.:
+
+```json
+"defaults": {
+  "model": { "primary": "anthropic/claude-sonnet-4-5" },
+  "compaction": { "mode": "safeguard" }
+}
+```
+
+**agents.list**: one entry per agent with required `id`, `workspace`, `agentDir`. The entry with `default: true` is the fallback when no binding matches. To add these 13 agents via CLI, see [§6 Method 4: Add IT team agents via openclaw agents add](#method-4-add-it-team-agents-via-openclaw-agents-add-matches-official-docs). The IT fragment defines 13 agents:
+
+| id | name | Role |
+|----|------|------|
+| technical-director | Technical Director | Default entry; orchestrator; delegates to roles below |
+| project-manager | Project Manager | Project and schedule |
+| product-manager | Product Manager | Requirements and product |
+| system-architect | System Architect | Architecture |
+| domain-expert | Domain Expert | Business/domain |
+| ux-designer | UX Designer | Experience design |
+| ui-designer | UI Designer | Interface design |
+| backend-engineer | Backend Engineer | Backend dev |
+| database-engineer | Database Engineer | DB and storage |
+| frontend-engineer | Frontend Engineer | Frontend dev |
+| mobile-engineer | Mobile Engineer | Mobile dev |
+| qa-engineer | QA Engineer | Test and quality |
+| ops-engineer | Ops Engineer | Deploy and ops |
+
+**agent-to-agent**: The IT team needs the orchestrator to delegate to these roles, so the fragment sets `tools.agentToAgent.enabled: true` and `allow` lists technical-director plus the 12 ids above. See [OpenClaw Multi-Agent](https://docs.openclaw.ai/concepts/multi-agent) and [Channel routing](https://docs.openclaw.ai/channels/channel-routing).
+
 ### Workspace files
 
 | File | Purpose | When to edit |
@@ -387,9 +466,57 @@ Main config: `~/.openclaw/openclaw.json` (JSON5). Override with `OPENCLAW_CONFIG
 | `TOOLS.md` | Tool usage | Change tool config |
 | `IDENTITY.md` | Identity | Optional |
 
+**Language**: Agent description files (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`) are in **English** for OpenClaw system prompt injection. Optional `AGENTS.zh-CN.md`, `SOUL.zh-CN.md` in the same directory provide Chinese reference (not injected). See [OpenClaw System Prompt](https://docs.openclaw.ai/concepts/system-prompt).
+
 ### Changing channel bindings
 
 Configure `bindings` by `channel`, `accountId`, `peer`, etc.; see [§4 Agent groups](#4-agent-groups-multi-agent-and-routing-in-one-gateway).
+
+### Channel configuration
+
+**Channels** are message sources (WhatsApp, Telegram, Discord, etc.). OpenClaw uses `channels` for login and allowlists, and **bindings** to route “which channel / account / conversation” to which agent. See [OpenClaw Channel routing](https://docs.openclaw.ai/channels/channel-routing) and [Configuration examples](https://docs.openclaw.ai/gateway/configuration-examples).
+
+**1. Configuring channels**
+
+Under `channels` in `openclaw.json`, configure per-channel accounts and allowlists, e.g. multi-account WhatsApp or Telegram allowlist:
+
+```json5
+{
+  "channels": {
+    "whatsapp": {
+      "allowFrom": ["+15555550123"],
+      "accounts": {
+        "personal": {},
+        "biz": { "authDir": "~/.openclaw/credentials/whatsapp/biz" }
+      }
+    },
+    "telegram": { "allowFrom": ["123456789"] },
+    "discord": {}
+  }
+}
+```
+
+- **allowFrom**: Allowlist of user/group IDs that can trigger the bot; omit for channel default.
+- **accounts**: For multiple accounts, one key per account (e.g. personal, biz); each corresponds to a `openclaw channels login --channel whatsapp --account biz`.
+- Session store lives under the state dir at `agents/<agentId>/sessions/`; see [Channel routing - Session storage](https://docs.openclaw.ai/channels/channel-routing).
+
+**2. Routing channels to agents (bindings)**
+
+Each entry in `bindings` is `{ agentId, match }`. Most specific match wins. Examples:
+
+| Scenario | match example | Notes |
+|----------|----------------|-------|
+| Whole channel to one agent | `{ channel: "telegram" }` | IT fragment: Telegram and Discord both go to technical-director |
+| Per-account routing | `{ channel: "whatsapp", accountId: "personal" }` | Route by logged-in account |
+| Specific conversation/group | `{ channel: "whatsapp", peer: { kind: "direct", id: "+15551234567" } }` | Exact peer ID |
+
+**3. Verifying channels and bindings**
+
+```bash
+openclaw channels status          # Channel connection status
+openclaw channels status --probe  # With probe (Telegram, Discord, etc.)
+openclaw agents list --bindings  # Agent list and bindings
+```
 
 ### Changing channel config
 
