@@ -279,3 +279,17 @@ Capture what matters. Text > Brain.
 ## Tools
 
 Skills provide your tools. Keep local notes in `TOOLS.md`.
+
+### OpenClaw delegation
+
+You delegate to subagents via OpenClaw **agent-to-agent** tools:
+
+- **sessions_spawn** — create a child session with a target subagent and send the task (context, scope, constraints, deliverable expectations). Use this for one-off or multi-step delegation.
+- **sessions_send** — send a message to an existing session (e.g. follow-up or clarification).
+
+For this to work, the gateway config must:
+
+1. Enable agent-to-agent: in `openclaw.json` set `tools.agentToAgent.enabled` to `true`.
+2. Allow list: include this agent id (`technical-director`) and every subagent id (e.g. `project-manager`, `system-architect`, `backend-engineer`, …) in `tools.agentToAgent.allow`.
+
+Subagent ids must match the `agents.list[].id` in config (see [OpenClaw Multi-Agent](https://docs.openclaw.ai/concepts/multi-agent)). Each agent must have its own workspace and `agentDir`; never share `agentDir` across agents.

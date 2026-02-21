@@ -13,7 +13,7 @@ OpenClaw 多智能体配置说明与示例，遵循 [OpenClaw Multi-Agent](https
 
 1. **确认 OpenClaw 已安装**（未安装见 [§1 系统要求与安装](#1-系统要求与安装)）。
 2. **准备配置**  
-   若你使用本仓库提供的 **config 片段**：用任意文本编辑器打开片段，将其中占位路径（如 `<REPO_ROOT>`）**全部**替换为你的实际路径（**绝对路径**，例如 `~/.openclaw` 或 `/home/you/openclaw-agents`）。
+   若你使用本仓库提供的 **config 片段**：用任意文本编辑器打开片段，将其中占位路径（如 `<REPO_ROOT>`）**全部**替换为你的实际路径（**绝对路径**，例如 `~/.openclaw` 或 `/home/you/openclaw-agents`）。**it 软件开发团队**请使用 `config/openclaw-it-fragment.json`：workspace 使用无编号路径（如 `~/.openclaw/workspace-it/technical-director`），与 agent id 一致；须设置 `tools.agentToAgent.enabled: true` 并将 technical-director 及 12 个子角色 id 列入 `allow`；多 profile 时 it 实例的 `OPENCLAW_CONFIG_PATH`、`OPENCLAW_STATE_DIR` 与端口需独立（见 §3 多网关）。
 3. **合并并重启**  
    把片段中的 `agents`、`bindings`、`tools.agentToAgent` 合并进 `~/.openclaw/openclaw.json`（若已有同名键，将 `agents.list` 与现有 list 合并，其余按需覆盖）。执行 `openclaw gateway restart`（或 `openclaw gateway` 启动）。
 4. **验证**  
@@ -25,7 +25,7 @@ OpenClaw 多智能体配置说明与示例，遵循 [OpenClaw Multi-Agent](https
 
 - **方式一（推荐，与官方一致）**：执行 `openclaw agents add <agentId>`（如 `openclaw agents add work`）。向导会创建独立 workspace（如 `~/.openclaw/workspace-work`）、`agentDir`（如 `~/.openclaw/agents/work/agent`）和 session 存储。再在 `~/.openclaw/openclaw.json` 中为该智能体设置 `workspace`（**绝对路径**）、`agentDir`（**禁止**与其它智能体共用），并按需添加 `bindings` 做路由。
 - **方式二**：手动创建目录 `~/.openclaw/workspace-<agentId>`，放入 SOUL.md、AGENTS.md、可选 USER.md 等；创建 `~/.openclaw/agents/<agentId>/agent` 与 `sessions`；在 `agents.list` 中增加一项，填写 `id`、`workspace`、`agentDir`。
-- 详细步骤与字段说明见 [§4 创建智能体](#4-创建智能体) 和 [§5 配置智能体](#5-配置智能体)。
+- 详细步骤与字段说明见 [§6 创建智能体](#6-创建智能体) 和 [§7 配置智能体](#7-配置智能体)。
 
 ---
 
@@ -33,16 +33,18 @@ OpenClaw 多智能体配置说明与示例，遵循 [OpenClaw Multi-Agent](https
 
 1. [系统要求与安装](#1-系统要求与安装)
 2. [快速开始与首次配置](#2-快速开始与首次配置)
-3. [什么是「一个智能体」](#3-什么是「一个智能体」)
-4. [创建智能体](#4-创建智能体)
-5. [配置智能体](#5-配置智能体)
-6. [多智能体路由](#6-多智能体路由)
-7. [完整配置示例](#7-完整配置示例)
-8. [路径与部署](#8-路径与部署)
-9. [模板与智能体对照](#9-模板与智能体对照)
-10. [Multi-Agent 约束说明](#10-multi-agent-约束说明)
-11. [故障排查](#11-故障排查)
-12. [相关链接](#12-相关链接)
+3. [多网关（同一主机多组智能体）](#3-多网关同一主机多组智能体)
+4. [智能体组（单网关内多智能体与路由）](#4-智能体组单网关内多智能体与路由)
+5. [什么是「一个智能体」](#5-什么是「一个智能体」)
+6. [创建智能体](#6-创建智能体)
+7. [配置智能体](#7-配置智能体)
+8. [完整配置示例](#8-完整配置示例)
+9. [垂直领域示例：独立实例与智能体配置](#9-垂直领域示例独立实例与智能体配置)
+10. [路径与部署](#10-路径与部署)
+11. [模板与智能体对照](#11-模板与智能体对照)
+12. [Multi-Agent 约束说明](#12-multi-agent-约束说明)
+13. [故障排查](#13-故障排查)
+14. [相关链接](#14-相关链接)
 
 ---
 
@@ -109,13 +111,13 @@ openclaw doctor
 ### 首次运行
 
 ```bash
-# 配置向导
-openclaw init
-# 或快速配置
-openclaw init --quick
+# 初始化配置与工作区
+openclaw setup
+# 或交互式引导（网关、工作区、技能、渠道等）
+openclaw onboard
 ```
 
-向导会引导：配置目录、默认模型、API Key、渠道登录（可选）。
+官方 CLI 使用 `setup` / `onboard`（无 `init` 命令）。向导会引导：配置目录、默认模型、API Key、渠道登录（可选）。
 
 ### 手动创建基础配置
 
@@ -150,13 +152,151 @@ mkdir -p ~/.openclaw/workspace ~/.openclaw/agents/main/agent
 
 ```bash
 openclaw gateway              # 前台
-openclaw gateway --daemon     # 后台
 openclaw gateway --port 8080  # 指定端口
+# 后台：安装为服务后启动（openclaw gateway install && openclaw gateway start），或 nohup openclaw gateway &
 ```
 
 ---
 
-## 3. 什么是「一个智能体」
+## 3. 多网关（同一主机多组智能体）
+
+### 为何需要多网关
+
+一个 OpenClaw Gateway 实例即可承载**多路消息连接**和**多个智能体**（通过 bindings 路由）。若你需要在**同一台主机**上跑**多组彼此隔离的智能体组**（例如：主业务一组、救援/调试一组，或不同团队/环境各一组），则应运行**多个 Gateway 实例**，即「多网关」。典型场景包括：
+
+- **隔离与冗余**：主机器人一组、救援机器人一组；主宕机时用救援实例调试或改配置。
+- **多环境/多团队**：同一台机器上，不同 profile 对应不同配置、工作区与端口，互不干扰。
+- **资源与端口隔离**：每组智能体使用独立配置、状态目录、工作区与端口，避免配置竞争和端口冲突。
+
+以下为 OpenClaw 官方文档 [Multiple Gateways (same host)](https://docs.openclaw.ai/gateway/multiple-gateways) 的要点与操作说明。
+
+### 隔离检查清单（必需）
+
+每个网关实例必须独立以下项，否则会出现配置竞争和端口冲突：
+
+- **`OPENCLAW_CONFIG_PATH`** — 每个实例一份配置文件
+- **`OPENCLAW_STATE_DIR`** — 每个实例的会话、凭证、缓存
+- **`agents.defaults.workspace`** — 每个实例的工作区根目录（若使用）
+- **`gateway.port`（或 `--port`）** — 每个实例端口唯一
+- **派生端口（浏览器/画布/CDP）** — 不得重叠
+
+### 推荐：使用配置文件（`--profile`）
+
+`--profile` 会按实例自动限定 `OPENCLAW_STATE_DIR` 与 `OPENCLAW_CONFIG_PATH`，并为服务名称加后缀。
+
+```bash
+# 主实例
+openclaw --profile main setup
+openclaw --profile main gateway --port 18789
+
+# 另一组（例如救援）
+openclaw --profile rescue setup
+openclaw --profile rescue gateway --port 19001
+```
+
+按 profile 安装为系统服务：
+
+```bash
+openclaw --profile main gateway install
+openclaw --profile rescue gateway install
+```
+
+### 救援机器人指南
+
+在同一主机上运行第二个 Gateway，需独立：profile/配置、状态目录、工作区、基础端口（及派生端口）。这样主机器人宕机时，救援实例仍可调试或应用配置更改。
+
+**端口间距**：两个实例的基础端口之间至少间隔 **20**，以免派生的浏览器/画布/CDP 端口冲突（例如 18789 与 19001，或 18789 与 19789）。
+
+```bash
+# 主实例（默认，不带 --profile）
+openclaw onboard
+openclaw gateway install
+
+# 救援实例（独立 profile + 端口）
+openclaw --profile rescue onboard
+# 说明：工作区名称默认带 -rescue 后缀；端口建议 ≥ 18789+20，如 19789
+openclaw --profile rescue gateway install
+```
+
+### 端口映射（派生）
+
+- **基础端口** = `gateway.port`（或 `OPENCLAW_GATEWAY_PORT` / `--port`）
+- 浏览器控制服务端口 = 基础 + 2（仅 loopback）
+- Canvas 在 Gateway HTTP 同端口提供；部分部署中 `canvasHost.port = 基础 + 4`
+- 浏览器 CDP 端口从 `browser.controlPort + 9 .. + 108` 自动分配
+
+若在配置或环境中覆盖上述任一项，需保证每个实例取值唯一。
+
+### 浏览器/CDP 注意事项（常见陷阱）
+
+- **不要**在多个实例上把 `browser.cdpUrl` 配成相同值。
+- 每个实例需自己的浏览器控制端口和 CDP 范围（由该实例的 gateway 端口派生）。
+- 若需显式 CDP 端口，按实例设置 `browser.profiles.<name>.cdpPort`。
+- 远程 Chrome：使用 `browser.profiles.<name>.cdpUrl`（按 profile、按实例）。
+
+### 手动环境变量示例
+
+```bash
+OPENCLAW_CONFIG_PATH=~/.openclaw/main.json \
+OPENCLAW_STATE_DIR=~/.openclaw-main \
+openclaw gateway --port 18789
+
+OPENCLAW_CONFIG_PATH=~/.openclaw/rescue.json \
+OPENCLAW_STATE_DIR=~/.openclaw-rescue \
+openclaw gateway --port 19001
+```
+
+### 快速检查
+
+```bash
+openclaw --profile main status
+openclaw --profile rescue status
+openclaw --profile rescue browser status
+```
+
+---
+
+## 4. 智能体组（单网关内多智能体与路由）
+
+**智能体组**指在**同一个 Gateway 实例**内配置的多个智能体（`agents.list`），通过 **bindings** 将入站消息路由到不同智能体。本节说明单网关内多智能体与路由规则。
+
+### 路由规则（最具体优先）
+
+1. `peer` 匹配（精确 DM/群组/渠道 ID）
+2. `parentPeer` 匹配（线程继承）
+3. `guildId + roles`（Discord 角色）
+4. `guildId`（Discord）
+5. `teamId`（Slack）
+6. 渠道的 `accountId` 匹配
+7. 渠道级别匹配（`accountId: "*"`）
+8. 回退到默认智能体（`default: true` 或列表首项）
+
+### 绑定示例
+
+```json5
+{
+  bindings: [
+    { agentId: "deep-work", match: { channel: "whatsapp", peer: { kind: "direct", id: "+15551234567" } } },
+    { agentId: "home", match: { channel: "whatsapp", accountId: "personal" } },
+    { agentId: "work", match: { channel: "whatsapp", accountId: "biz" } },
+    { agentId: "main", match: { channel: "telegram" } },
+  ]
+}
+```
+
+### 匹配字段说明
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `channel` | 渠道类型 | `whatsapp`, `telegram`, `discord` |
+| `accountId` | 渠道账号标识 | `personal`, `biz`, `default` |
+| `peer.kind` | 对话类型 | `direct`（私聊）, `group`（群组） |
+| `peer.id` | 对话唯一标识 | 手机号、群组 ID、频道 ID |
+| `guildId` | Discord 服务器 ID | `"123456789012345678"` |
+
+---
+
+## 5. 什么是「一个智能体」
 
 每个**智能体（Agent）**是独立范围的「大脑」，拥有自己的：
 
@@ -170,7 +310,7 @@ openclaw gateway --port 8080  # 指定端口
 
 ---
 
-## 4. 创建智能体
+## 6. 创建智能体
 
 ### 方法一：使用向导（推荐）
 
@@ -216,7 +356,7 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 
 ---
 
-## 5. 配置智能体
+## 7. 配置智能体
 
 ### 配置文件位置
 
@@ -247,7 +387,7 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 
 ### 修改渠道绑定
 
-在 `bindings` 中按 `channel`、`accountId`、`peer` 等配置；见下文「多智能体路由」。
+在 `bindings` 中按 `channel`、`accountId`、`peer` 等配置；见 [§4 智能体组（单网关内多智能体与路由）](#4-智能体组单网关内多智能体与路由)。
 
 ### 修改渠道配置
 
@@ -267,24 +407,15 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 
 ### 配置热重载与验证
 
-```bash
-openclaw config validate
-openclaw config reload
-# 或发送 SIGHUP：kill -HUP <gateway_pid>
-```
-
-```bash
-openclaw agents list --bindings
-openclaw agents validate --id work
-openclaw agents test-binding --agent work --channel whatsapp
-```
+- **校验与健康检查**：`openclaw doctor`（含配置与网关检查）。配置热重载由网关监听配置文件自动完成，或通过 `openclaw gateway restart` 重启生效。
+- **查看智能体与绑定**：`openclaw agents list --bindings`；**渠道连通性**：`openclaw channels status --probe`。
 
 ### 删除智能体
 
 ```bash
-openclaw agents remove --id work
-# 可选：手动删除工作空间与状态（谨慎）
-# rm -rf ~/.openclaw/workspace-work ~/.openclaw/agents/work
+openclaw agents delete work
+# 非交互式需加 --force；会从配置中移除并清理工作区与状态
+# openclaw agents delete work --force
 ```
 
 ### 备份与恢复
@@ -303,45 +434,7 @@ cp ~/.openclaw/openclaw.json.backup ~/.openclaw/openclaw.json
 
 ---
 
-## 6. 多智能体路由
-
-### 路由规则（最具体优先）
-
-1. `peer` 匹配（精确 DM/群组/渠道 ID）
-2. `parentPeer` 匹配（线程继承）
-3. `guildId + roles`（Discord 角色）
-4. `guildId`（Discord）
-5. `teamId`（Slack）
-6. 渠道的 `accountId` 匹配
-7. 渠道级别匹配（`accountId: "*"`）
-8. 回退到默认智能体（`default: true` 或列表首项）
-
-### 绑定示例
-
-```json5
-{
-  bindings: [
-    { agentId: "deep-work", match: { channel: "whatsapp", peer: { kind: "direct", id: "+15551234567" } } },
-    { agentId: "home", match: { channel: "whatsapp", accountId: "personal" } },
-    { agentId: "work", match: { channel: "whatsapp", accountId: "biz" } },
-    { agentId: "main", match: { channel: "telegram" } },
-  ]
-}
-```
-
-### 匹配字段说明
-
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| `channel` | 渠道类型 | `whatsapp`, `telegram`, `discord` |
-| `accountId` | 渠道账号标识 | `personal`, `biz`, `default` |
-| `peer.kind` | 对话类型 | `direct`（私聊）, `group`（群组） |
-| `peer.id` | 对话唯一标识 | 手机号、群组 ID、频道 ID |
-| `guildId` | Discord 服务器 ID | `"123456789012345678"` |
-
----
-
-## 7. 完整配置示例
+## 8. 完整配置示例
 
 ### WhatsApp 多账号（私人 + 工作）
 
@@ -385,7 +478,93 @@ openclaw channels login --channel whatsapp --account biz
 
 ---
 
-## 8. 路径与部署
+## 9. 垂直领域示例：独立实例与智能体配置
+
+本仓库除通用 `main/` 与 `it/`（技术团队 13 角色）外，还提供 **7 个垂直领域** 的智能体模板，对应目录与用途如下。
+
+| 领域 | 本仓库路径 | 说明 |
+|------|------------|------|
+| education | `education/` | 教育助手、学科助手、评语、家校沟通 |
+| wecom-kf | `wecom-kf/` | 企微客服：售前、售后、技术 |
+| partner | `partner/` | 陪伴：主入口、提醒、故事、成长报告 |
+| product | `product/` | 项目：PM、需求、架构、测试、文档、运维、商务、报表 |
+| game | `game/` | 小游戏主持 |
+| it | `it/` | 技术总监等 13 角色（软件开发团队）；目录编号 `1-`…`13-` 仅表示顺序，OpenClaw workspace 路径使用无编号名称 |
+| scrm | `scrm/` | SCRM 运营：引流、获客、客资、建联、客服（复用 wecom-kf）、私域；6 阶段对应 partme-docs |
+| web3 | `web3/` | 链上分析、DeFi、风险、组合；扩展见 partme-docs |
+
+**it 软件开发团队**：技术总监为编排者（orchestrator），可经 OpenClaw **agent-to-agent**（sessions_spawn）委派 12 个子角色。使用时需启用 `tools.agentToAgent.enabled: true` 并将 technical-director 与全部子角色 id 列入 `allow`；建议使用本仓库 **config/openclaw-it-fragment.json** 片段，默认入口为 `technical-director`。
+
+**两种用法**：① **单网关多 Agent** — 同一 OpenClaw 实例内，用 [§4 智能体组](#4-智能体组单网关内多智能体与路由) 的 bindings 按 channel/accountId 等路由到不同领域 Agent；② **多网关多实例** — 每领域独立 `--profile`，配置/端口/工作区完全隔离，见 [§3 多网关](#3-多网关同一主机多组智能体)。
+
+**创建独立实例（多网关）**：使用 `openclaw --profile <领域名> setup` 初始化，再 `openclaw --profile <领域名> gateway --port <端口>` 启动（端口与主实例错开 ≥20，如 education 用 18809）。`OPENCLAW_CONFIG_PATH` 与 `OPENCLAW_STATE_DIR` 按 profile 隔离，详见 §3。
+
+**配置智能体**：将本仓库对应目录复制或链接到 OpenClaw 工作区（如 `~/.openclaw/workspace-education/edu-assistant`），在 `openclaw.json` 的 `agents.list` 中配置 `id`、`workspace`、`agentDir`，并在 `bindings` 中按 channel 或业务规则路由。详见 [§6 创建智能体](#6-创建智能体)、[§7 配置智能体](#7-配置智能体)。
+
+**汇总表（示例）**
+
+| 领域 | profile | 建议端口 | 代表 agentId | 工作区路径示例 |
+|------|---------|----------|--------------|----------------|
+| education | education | 18809 | edu-assistant | `~/.openclaw/workspace-education/edu-assistant` |
+| wecom-kf | wecom-kf | 18819 | presale | `~/.openclaw/workspace-wecom-kf/presale` |
+| partner | partner | 18839 | companion | `~/.openclaw/workspace-partner/companion` |
+| product | product | 18849 | pm-assistant | `~/.openclaw/workspace-product/pm-assistant` |
+| game | game | 18859 | game-host | `~/.openclaw/workspace-game/game-host` |
+| it | it | 18829 | technical-director | `~/.openclaw/workspace-it/technical-director` |
+| scrm | scrm | 18819 | scrm-orchestrator | `~/.openclaw-scrm/workspace-scrm/lead-gen`（或 scrm-orchestrator） |
+| web3 | web3 | 18869 | chain-analyst | `~/.openclaw-web3/workspace-web3/chain-analyst` |
+
+it 工作区路径使用**无编号**名称（与 agent id 一致）；部署时可将仓库 `it/1-technical-director` 复制或链接到 `~/.openclaw/workspace-it/technical-director`，其余角色同理（如 `it/2-project-manager` → `workspace-it/project-manager`）。
+
+**OpenClaw 官方文档与运维**：完整文档索引 [docs.openclaw.ai/llms.txt](https://docs.openclaw.ai/llms.txt)；若访问受限可改用 [GitHub 镜像](https://github.com/openclaw/openclaw/tree/main/docs)。多 profile 时带 `--profile <name>` 执行 `openclaw status`、`openclaw doctor`、`openclaw health --json` 等。记忆与技能见 [Memory](https://docs.openclaw.ai/concepts/memory)、[Skills](https://docs.openclaw.ai/tools/skills)；故障排除见 [Updating / If you're stuck](https://docs.openclaw.ai/install/updating)、[Discord](https://discord.gg/clawd)。
+
+**深入阅读**：各领域技术方案与智能体职责见仓库 `partme-docs/OpenClaw-垂直领域应用分析` 下对应文档。
+
+### 三组并存启动与验证（IT 研发 + SCRM 运营 + Web3）
+
+同一主机跑三组智能体时：**默认 Gateway** = IT 研发（合并 openclaw-it-fragment.json），**profile scrm** = SCRM 运营，**profile web3** = Web3 团队。每组独立配置、状态目录与端口，端口间距 ≥20。
+
+**启动示例**：
+
+```bash
+# 1）IT 研发（默认，端口 18789）
+openclaw onboard
+openclaw gateway --port 18789
+# 或安装为服务：openclaw gateway install && openclaw gateway start
+
+# 2）SCRM 运营（profile scrm，端口 18819）
+openclaw --profile scrm setup
+openclaw --profile scrm gateway --port 18819
+
+# 3）Web3（profile web3，端口 18869）
+openclaw --profile web3 setup
+openclaw --profile web3 gateway --port 18869
+```
+
+**验证**：
+
+```bash
+# 各 profile 状态与诊断
+openclaw status
+openclaw --profile scrm status
+openclaw --profile web3 status
+
+# 各实例内智能体与绑定
+openclaw agents list --bindings
+openclaw --profile scrm agents list --bindings
+openclaw --profile web3 agents list --bindings
+
+# Gateway 健康（需对应实例已启动）
+openclaw health --json
+openclaw --profile scrm health --json
+openclaw --profile web3 health --json
+```
+
+合并配置片段前，将各片段中的路径占位符替换为实际路径（SCRM 使用 `~/.openclaw-scrm`，Web3 使用 `~/.openclaw-web3`）；详见 [config/README.md](config/README.md)。
+
+---
+
+## 10. 路径与部署
 
 ### 路径速查表
 
@@ -474,7 +653,7 @@ chmod 600 ~/.openclaw/agents/*/agent/auth-profiles.json
 
 ---
 
-## 9. 模板与智能体对照
+## 11. 模板与智能体对照
 
 ### 智能体工作空间文件结构
 
@@ -488,6 +667,8 @@ chmod 600 ~/.openclaw/agents/*/agent/auth-profiles.json
 ├── IDENTITY.md    # 身份信息（可选）
 └── TOOLS.md       # 工具使用说明（可选）
 ```
+
+垂直领域模板位于本仓库 `education/`、`wecom-kf/`、`partner/`、`product/`、`game/`、`web3/`，it 模板位于 `it/`；见 [§9 垂直领域示例](#9-垂直领域示例独立实例与智能体配置)。
 
 ### 智能体类型示例（以官方路径为准）
 
@@ -516,7 +697,7 @@ mkdir -p ~/.openclaw/workspace-coding
 
 ---
 
-## 10. Multi-Agent 约束说明
+## 12. Multi-Agent 约束说明
 
 ### 隔离性
 
@@ -569,7 +750,7 @@ mkdir -p ~/.openclaw/workspace-coding
 
 ---
 
-## 11. 故障排查
+## 13. 故障排查
 
 ### 常见问题
 
@@ -578,15 +759,15 @@ mkdir -p ~/.openclaw/workspace-coding
 | 路由错误 | `openclaw agents list --bindings` 检查绑定；`openclaw gateway --verbose` 看路由日志 |
 | 认证失败 | 检查 `~/.openclaw/agents/<agentId>/agent/auth-profiles.json` 是否存在；`openclaw channels login` 重新登录 |
 | 会话混乱 | `rm -rf ~/.openclaw/agents/<agentId>/sessions/*` 后重启网关 |
-| 配置不生效 | `openclaw config validate`；`openclaw config reload` 或重启网关 |
+| 配置不生效 | `openclaw doctor` 检查；`openclaw gateway restart` 重启网关使配置生效 |
 
 ### 调试命令
 
 ```bash
 openclaw gateway --verbose
 openclaw channels status --probe
-openclaw agents test-binding --agent <id> --channel <type>
-openclaw config export --output debug.json
+openclaw agents list --bindings
+openclaw doctor
 ```
 
 ### 安装与启动问题
@@ -608,10 +789,12 @@ curl -fsSL https://openclaw.ai/uninstall.sh | bash
 
 ---
 
-## 12. 相关链接
+## 14. 相关链接
 
 - [OpenClaw 官方文档](https://docs.openclaw.ai)
+- [CLI Reference](https://docs.openclaw.ai/cli) — 命令与全局选项（`--profile`、`--dev`、`gateway`、`agents`、`channels` 等）
 - [Multi-Agent Routing](https://docs.openclaw.ai/concepts/multi-agent)
+- [Multiple Gateways（同一主机多网关）](https://docs.openclaw.ai/gateway/multiple-gateways) — 官方多网关说明（本仓库镜像：`research/claw-ecosystem/openclaw/docs/gateway/multiple-gateways.md`、`docs/zh-CN/gateway/multiple-gateways.md`）
 - [渠道配置](https://docs.openclaw.ai/channels)
 - [文档索引 llms.txt](https://docs.openclaw.ai/llms.txt)
 

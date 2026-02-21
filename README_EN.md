@@ -13,7 +13,7 @@ OpenClaw multi-agent configuration guide and examples, following the [OpenClaw M
 
 1. **Ensure OpenClaw is installed** (see [§1 System Requirements & Installation](#1-system-requirements--installation) if not).
 2. **Prepare config**  
-   If you use a **config fragment** from this repo: open the fragment in an editor and replace any placeholder path (e.g. `<REPO_ROOT>`) with your **absolute path** (e.g. `~/.openclaw` or `/home/you/openclaw-agents`).
+   If you use a **config fragment** from this repo: open the fragment in an editor and replace any placeholder path (e.g. `<REPO_ROOT>`) with your **absolute path** (e.g. `~/.openclaw` or `/home/you/openclaw-agents`). For the **it software dev team**, use `config/openclaw-it-fragment.json`: workspace paths are unnumbered (e.g. `~/.openclaw/workspace-it/technical-director`), matching agent id; set `tools.agentToAgent.enabled: true` and list technical-director plus all 12 sub-role ids in `allow`; with multiple profiles, the it instance needs its own `OPENCLAW_CONFIG_PATH`, `OPENCLAW_STATE_DIR`, and port (§3).
 3. **Merge and restart**  
    Merge the fragment’s `agents`, `bindings`, and `tools.agentToAgent` into `~/.openclaw/openclaw.json` (merge `agents.list` with existing list if keys already exist). Run `openclaw gateway restart` (or `openclaw gateway`).
 4. **Verify**  
@@ -27,7 +27,7 @@ No local or product-specific paths are required; use paths that match the [offic
   Run `openclaw agents add <agentId>` (e.g. `openclaw agents add work`). The wizard creates a dedicated workspace (e.g. `~/.openclaw/workspace-work`), `agentDir` (e.g. `~/.openclaw/agents/work/agent`), and session store. In `~/.openclaw/openclaw.json` set `workspace` (absolute path) and `agentDir` (must not be shared with other agents), and add `bindings` as needed for routing.
 - **Option 2**  
   Manually create `~/.openclaw/workspace-<agentId>` with SOUL.md, AGENTS.md, optional USER.md, etc.; create `~/.openclaw/agents/<agentId>/agent` and `sessions`; add an entry to `agents.list` with `id`, `workspace`, `agentDir`.
-- For more detail and fields, see [§4 Creating agents](#4-creating-agents) and [§5 Configuring agents](#5-configuring-agents).
+- For more detail and fields, see [§6 Creating agents](#6-creating-agents) and [§7 Configuring agents](#7-configuring-agents).
 
 ---
 
@@ -35,16 +35,18 @@ No local or product-specific paths are required; use paths that match the [offic
 
 1. [System Requirements & Installation](#1-system-requirements--installation)
 2. [Quick Start & First-Time Setup](#2-quick-start--first-time-setup)
-3. [What Is "One Agent"](#3-what-is-one-agent)
-4. [Creating Agents](#4-creating-agents)
-5. [Configuring Agents](#5-configuring-agents)
-6. [Multi-Agent Routing](#6-multi-agent-routing)
-7. [Full Configuration Examples](#7-full-configuration-examples)
-8. [Paths & Deployment](#8-paths--deployment)
-9. [Templates & Agent Mapping](#9-templates--agent-mapping)
-10. [Multi-Agent Constraints](#10-multi-agent-constraints)
-11. [Troubleshooting](#11-troubleshooting)
-12. [Links](#12-links)
+3. [Multiple Gateways (same host, multiple agent groups)](#3-multiple-gateways-same-host-multiple-agent-groups)
+4. [Agent groups (multi-agent and routing in one gateway)](#4-agent-groups-multi-agent-and-routing-in-one-gateway)
+5. [What Is "One Agent"](#5-what-is-one-agent)
+6. [Creating Agents](#6-creating-agents)
+7. [Configuring Agents](#7-configuring-agents)
+8. [Full Configuration Examples](#8-full-configuration-examples)
+9. [Vertical domains: independent instances and agent configuration](#9-vertical-domains-independent-instances-and-agent-configuration)
+10. [Paths & Deployment](#10-paths--deployment)
+11. [Templates & Agent Mapping](#11-templates--agent-mapping)
+12. [Multi-Agent Constraints](#12-multi-agent-constraints)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Links](#14-links)
 
 ---
 
@@ -111,12 +113,13 @@ openclaw doctor
 ### First run
 
 ```bash
-openclaw init
-# or
-openclaw init --quick
+# Initialize config and workspace
+openclaw setup
+# Or interactive wizard (gateway, workspace, skills, channels)
+openclaw onboard
 ```
 
-The wizard guides you through: config directory, default model, API keys, channel login (optional).
+The official CLI uses `setup` / `onboard` (there is no `init` command). The wizard guides you through: config directory, default model, API keys, channel login (optional).
 
 ### Manual minimal config
 
@@ -151,13 +154,151 @@ Minimal `~/.openclaw/openclaw.json`:
 
 ```bash
 openclaw gateway              # foreground
-openclaw gateway --daemon     # background
 openclaw gateway --port 8080  # custom port
+# Background: install as service then start (openclaw gateway install && openclaw gateway start), or nohup openclaw gateway &
 ```
 
 ---
 
-## 3. What Is "One Agent"
+## 3. Multiple Gateways (same host, multiple agent groups)
+
+### Why run multiple gateways
+
+A single OpenClaw Gateway instance can handle **multiple messaging connections** and **multiple agents** (routed via bindings). When you need **multiple isolated agent groups on the same host** (e.g. main vs rescue, or different teams/environments), run **multiple Gateway instances** (“multiple gateways”). Typical cases:
+
+- **Isolation and redundancy**: one group for the main bot, one for a rescue bot; use the rescue instance to debug or change config when the main one is down.
+- **Multiple environments/teams**: different profiles with different config, workspace, and ports on the same machine.
+- **Resource and port isolation**: each group uses its own config, state dir, workspace, and ports to avoid config races and port conflicts.
+
+The following summarizes the official docs [Multiple Gateways (same host)](https://docs.openclaw.ai/gateway/multiple-gateways) .
+
+### Isolation checklist (required)
+
+Each gateway instance must have its own:
+
+- **`OPENCLAW_CONFIG_PATH`** — config file per instance
+- **`OPENCLAW_STATE_DIR`** — sessions, credentials, caches per instance
+- **`agents.defaults.workspace`** — workspace root per instance (if used)
+- **`gateway.port` (or `--port`)** — unique port per instance
+- **Derived ports (browser/canvas/CDP)** — must not overlap
+
+If any of these are shared, you will get config races and port conflicts.
+
+### Recommended: profiles (`--profile`)
+
+`--profile` auto-scopes `OPENCLAW_STATE_DIR` and `OPENCLAW_CONFIG_PATH` and suffixes service names.
+
+```bash
+# main
+openclaw --profile main setup
+openclaw --profile main gateway --port 18789
+
+# rescue (or second group)
+openclaw --profile rescue setup
+openclaw --profile rescue gateway --port 19001
+```
+
+Install per-profile services:
+
+```bash
+openclaw --profile main gateway install
+openclaw --profile rescue gateway install
+```
+
+### Rescue-bot guide
+
+Run a second Gateway on the same host with its own profile/config, state dir, workspace, and base port (plus derived ports). That keeps the rescue bot isolated so it can debug or apply config when the primary is down.
+
+**Port spacing**: leave at least **20** ports between base ports so derived browser/canvas/CDP ports never collide (e.g. 18789 and 19001, or 18789 and 19789).
+
+```bash
+# Main (default, no --profile)
+openclaw onboard
+openclaw gateway install
+
+# Rescue (isolated profile + port)
+openclaw --profile rescue onboard
+# Workspace name is postfixed with -rescue by default; port should be at least 18789+20, e.g. 19789
+openclaw --profile rescue gateway install
+```
+
+### Port mapping (derived)
+
+- **Base port** = `gateway.port` (or `OPENCLAW_GATEWAY_PORT` / `--port`)
+- Browser control service port = base + 2 (loopback only)
+- Canvas is served on the Gateway HTTP server (same port); in some setups `canvasHost.port = base + 4`
+- Browser CDP ports auto-allocate from `browser.controlPort + 9 .. + 108`
+
+If you override any of these in config or env, keep them unique per instance.
+
+### Browser/CDP notes (common footgun)
+
+- Do **not** pin `browser.cdpUrl` to the same values on multiple instances.
+- Each instance needs its own browser control port and CDP range (derived from its gateway port).
+- For explicit CDP ports, set `browser.profiles.<name>.cdpPort` per instance.
+- Remote Chrome: use `browser.profiles.<name>.cdpUrl` (per profile, per instance).
+
+### Manual env example
+
+```bash
+OPENCLAW_CONFIG_PATH=~/.openclaw/main.json \
+OPENCLAW_STATE_DIR=~/.openclaw-main \
+openclaw gateway --port 18789
+
+OPENCLAW_CONFIG_PATH=~/.openclaw/rescue.json \
+OPENCLAW_STATE_DIR=~/.openclaw-rescue \
+openclaw gateway --port 19001
+```
+
+### Quick checks
+
+```bash
+openclaw --profile main status
+openclaw --profile rescue status
+openclaw --profile rescue browser status
+```
+
+---
+
+## 4. Agent groups (multi-agent and routing in one gateway)
+
+An **agent group** is the set of agents (`agents.list`) in **one Gateway instance**, with **bindings** routing inbound messages to different agents. This section covers multi-agent and routing rules inside a single gateway.
+
+1. `peer` match (exact DM/group/channel ID)
+2. `parentPeer` match (thread inheritance)
+3. `guildId + roles` (Discord roles)
+4. `guildId` (Discord)
+5. `teamId` (Slack)
+6. Channel `accountId` match
+7. Channel-level match (`accountId: "*"`)
+8. Fallback to default agent (`default: true` or first in list)
+
+### Binding examples
+
+```json5
+{
+  bindings: [
+    { agentId: "deep-work", match: { channel: "whatsapp", peer: { kind: "direct", id: "+15551234567" } } },
+    { agentId: "home", match: { channel: "whatsapp", accountId: "personal" } },
+    { agentId: "work", match: { channel: "whatsapp", accountId: "biz" } },
+    { agentId: "main", match: { channel: "telegram" } },
+  ]
+}
+```
+
+### Match fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| `channel` | Channel type | `whatsapp`, `telegram`, `discord` |
+| `accountId` | Channel account ID | `personal`, `biz`, `default` |
+| `peer.kind` | Conversation type | `direct`, `group` |
+| `peer.id` | Conversation ID | Phone number, group ID, channel ID |
+| `guildId` | Discord server ID | `"123456789012345678"` |
+
+---
+
+## 5. What Is "One Agent"
 
 Each **agent** is an isolated "brain" with its own:
 
@@ -171,7 +312,7 @@ Each **agent** is an isolated "brain" with its own:
 
 ---
 
-## 4. Creating Agents
+## 6. Creating Agents
 
 ### Method 1: Wizard (recommended)
 
@@ -217,7 +358,7 @@ cp -r ~/.openclaw/agents/main ~/.openclaw/agents/copy
 
 ---
 
-## 5. Configuring Agents
+## 7. Configuring Agents
 
 ### Config file location
 
@@ -248,7 +389,7 @@ Main config: `~/.openclaw/openclaw.json` (JSON5). Override with `OPENCLAW_CONFIG
 
 ### Changing channel bindings
 
-Configure `bindings` by `channel`, `accountId`, `peer`, etc.; see "Multi-Agent Routing" below.
+Configure `bindings` by `channel`, `accountId`, `peer`, etc.; see [§4 Agent groups](#4-agent-groups-multi-agent-and-routing-in-one-gateway).
 
 ### Changing channel config
 
@@ -268,24 +409,15 @@ Configure `bindings` by `channel`, `accountId`, `peer`, etc.; see "Multi-Agent R
 
 ### Hot reload and validation
 
-```bash
-openclaw config validate
-openclaw config reload
-# or: kill -HUP <gateway_pid>
-```
-
-```bash
-openclaw agents list --bindings
-openclaw agents validate --id work
-openclaw agents test-binding --agent work --channel whatsapp
-```
+- **Validation and health**: `openclaw doctor` (includes config and gateway checks). Config hot reload is done by the gateway watching the config file, or run `openclaw gateway restart` to apply changes.
+- **Agents and bindings**: `openclaw agents list --bindings`; **channel connectivity**: `openclaw channels status --probe`.
 
 ### Removing an agent
 
 ```bash
-openclaw agents remove --id work
-# Optional: manually remove workspace and state (use with care)
-# rm -rf ~/.openclaw/workspace-work ~/.openclaw/agents/work
+openclaw agents delete work
+# Non-interactive: add --force; removes from config and prunes workspace/state
+# openclaw agents delete work --force
 ```
 
 ### Backup and restore
@@ -304,45 +436,7 @@ cp ~/.openclaw/openclaw.json.backup ~/.openclaw/openclaw.json
 
 ---
 
-## 6. Multi-Agent Routing
-
-### Routing rules (most specific wins)
-
-1. `peer` match (exact DM/group/channel ID)
-2. `parentPeer` match (thread inheritance)
-3. `guildId + roles` (Discord roles)
-4. `guildId` (Discord)
-5. `teamId` (Slack)
-6. Channel `accountId` match
-7. Channel-level match (`accountId: "*"`)
-8. Fallback to default agent (`default: true` or first in list)
-
-### Binding examples
-
-```json5
-{
-  bindings: [
-    { agentId: "deep-work", match: { channel: "whatsapp", peer: { kind: "direct", id: "+15551234567" } } },
-    { agentId: "home", match: { channel: "whatsapp", accountId: "personal" } },
-    { agentId: "work", match: { channel: "whatsapp", accountId: "biz" } },
-    { agentId: "main", match: { channel: "telegram" } },
-  ]
-}
-```
-
-### Match fields
-
-| Field | Description | Example |
-|-------|-------------|---------|
-| `channel` | Channel type | `whatsapp`, `telegram`, `discord` |
-| `accountId` | Channel account ID | `personal`, `biz`, `default` |
-| `peer.kind` | Conversation type | `direct`, `group` |
-| `peer.id` | Conversation ID | Phone number, group ID, channel ID |
-| `guildId` | Discord server ID | `"123456789012345678"` |
-
----
-
-## 7. Full Configuration Examples
+## 8. Full Configuration Examples
 
 ### WhatsApp multi-account (personal + work)
 
@@ -386,7 +480,49 @@ openclaw channels login --channel whatsapp --account biz
 
 ---
 
-## 8. Paths & Deployment
+## 9. Vertical domains: independent instances and agent configuration
+
+Besides the generic `main/` and `it/` (13 technical roles), this repo provides templates for **7 vertical domains**. Directory mapping:
+
+| Domain | Repo path | Description |
+|--------|-----------|-------------|
+| education | `education/` | Edu assistant, subject helpers, comments, parent liaison |
+| wecom-kf | `wecom-kf/` | WeCom support: presale, aftersale, tech |
+| partner | `partner/` | Companion: main entry, reminder, storyteller, growth reporter |
+| product | `product/` | Project: PM, requirements, architecture, test, docs, DevOps, business, reports |
+| game | `game/` | Game host |
+| it | `it/` | 13 roles (software dev team); directory numbers `1-`…`13-` are for ordering only—OpenClaw workspace paths use unnumbered names |
+| web3 | `web3/` | Chain analyst, DeFi, risk, portfolio; extensions see partme-docs |
+
+**it software dev team**: The Technical Director is the orchestrator and can delegate to 12 sub-roles via OpenClaw **agent-to-agent** (sessions_spawn). Enable `tools.agentToAgent.enabled: true` and list technical-director and all sub-role ids in `allow`. Use **config/openclaw-it-fragment.json**; default entry agent is `technical-director`.
+
+**Two usage modes**: ① **Single gateway, multiple agents** — same OpenClaw instance, use [§4 Agent groups](#4-agent-groups-multi-agent-and-routing-in-one-gateway) bindings to route by channel/accountId. ② **Multiple gateways** — one `--profile` per domain for full isolation (config, port, workspace); see [§3 Multiple gateways](#3-multiple-gateways-same-host-multiple-agent-groups).
+
+**Create an independent instance**: Run `openclaw --profile <domain> setup`, then `openclaw --profile <domain> gateway --port <port>` (use a port offset ≥20 from the main instance, e.g. 18809 for education). Config and state are isolated per profile (§3).
+
+**Configure agents**: Copy or link the repo directory into your OpenClaw workspace (e.g. `~/.openclaw/workspace-education/edu-assistant`), then set `id`, `workspace`, `agentDir` in `agents.list` and add `bindings` for routing. See [§6 Creating agents](#6-creating-agents) and [§7 Configuring agents](#7-configuring-agents).
+
+**Summary table (example)**
+
+| Domain | profile | Suggested port | Representative agentId | Workspace path example |
+|--------|---------|----------------|------------------------|-------------------------|
+| education | education | 18809 | edu-assistant | `~/.openclaw/workspace-education/edu-assistant` |
+| wecom-kf | wecom-kf | 18819 | presale | `~/.openclaw/workspace-wecom-kf/presale` |
+| partner | partner | 18839 | companion | `~/.openclaw/workspace-partner/companion` |
+| product | product | 18849 | pm-assistant | `~/.openclaw/workspace-product/pm-assistant` |
+| game | game | 18859 | game-host | `~/.openclaw/workspace-game/game-host` |
+| it | it | 18829 | technical-director | `~/.openclaw/workspace-it/technical-director` |
+| web3 | web3 | 18869 | chain-analyst | `~/.openclaw/workspace-web3/chain-analyst` |
+
+For it, workspace paths use **unnumbered** names (matching agent id). When deploying, copy or link e.g. repo `it/1-technical-director` to `~/.openclaw/workspace-it/technical-director`, and similarly for other roles (`it/2-project-manager` → `workspace-it/project-manager`, etc.).
+
+**OpenClaw docs and ops**: Full index [docs.openclaw.ai/llms.txt](https://docs.openclaw.ai/llms.txt); if unreachable, use [GitHub mirror](https://github.com/openclaw/openclaw/tree/main/docs). With multiple profiles, run `openclaw status`, `openclaw doctor`, `openclaw health --json` with `--profile <name>`. Memory and skills: [Memory](https://docs.openclaw.ai/concepts/memory), [Skills](https://docs.openclaw.ai/tools/skills). Troubleshooting: [Updating / If you're stuck](https://docs.openclaw.ai/install/updating), [Discord](https://discord.gg/clawd).
+
+**Further reading**: Domain design and agent roles are documented under `partme-docs/OpenClaw-垂直领域应用分析` in the repo.
+
+---
+
+## 10. Paths & Deployment
 
 ### Path reference
 
@@ -475,7 +611,7 @@ Use a scheduled job to back up `openclaw.json`, `workspace*`, and `agents` to da
 
 ---
 
-## 9. Templates & Agent Mapping
+## 11. Templates & Agent Mapping
 
 ### Workspace file layout
 
@@ -489,6 +625,8 @@ Use a scheduled job to back up `openclaw.json`, `workspace*`, and `agents` to da
 ├── IDENTITY.md    # Identity (optional)
 └── TOOLS.md       # Tool usage (optional)
 ```
+
+Vertical-domain templates live in this repo under `education/`, `wecom-kf/`, `partner/`, `product/`, `game/`, `web3/`; it templates under `it/`. See [§9 Vertical domains](#9-vertical-domains-independent-instances-and-agent-configuration).
 
 ### Agent type examples (official paths only)
 
@@ -517,7 +655,7 @@ mkdir -p ~/.openclaw/workspace-coding
 
 ---
 
-## 10. Multi-Agent Constraints
+## 12. Multi-Agent Constraints
 
 ### Isolation
 
@@ -570,7 +708,7 @@ mkdir -p ~/.openclaw/workspace-coding
 
 ---
 
-## 11. Troubleshooting
+## 13. Troubleshooting
 
 ### Common issues
 
@@ -579,15 +717,15 @@ mkdir -p ~/.openclaw/workspace-coding
 | Wrong routing | `openclaw agents list --bindings`; `openclaw gateway --verbose` for routing logs |
 | Auth failure | Check `~/.openclaw/agents/<agentId>/agent/auth-profiles.json`; `openclaw channels login` to re-login |
 | Session mix-up | `rm -rf ~/.openclaw/agents/<agentId>/sessions/*` then restart gateway |
-| Config not applied | `openclaw config validate`; `openclaw config reload` or restart gateway |
+| Config not applied | `openclaw doctor` to check; `openclaw gateway restart` to apply config |
 
 ### Debug commands
 
 ```bash
 openclaw gateway --verbose
 openclaw channels status --probe
-openclaw agents test-binding --agent <id> --channel <type>
-openclaw config export --output debug.json
+openclaw agents list --bindings
+openclaw doctor
 ```
 
 ### Install and startup
@@ -609,10 +747,12 @@ curl -fsSL https://openclaw.ai/uninstall.sh | bash
 
 ---
 
-## 12. Links
+## 14. Links
 
 - [OpenClaw docs](https://docs.openclaw.ai)
+- [CLI Reference](https://docs.openclaw.ai/cli) — commands and global options (`--profile`, `--dev`, `gateway`, `agents`, `channels`, etc.)
 - [Multi-Agent Routing](https://docs.openclaw.ai/concepts/multi-agent)
+- [Multiple Gateways (same host)](https://docs.openclaw.ai/gateway/multiple-gateways) — official multi-gateway guide (repo: `research/claw-ecosystem/openclaw/docs/gateway/multiple-gateways.md`, `docs/zh-CN/gateway/multiple-gateways.md`)
 - [Channels](https://docs.openclaw.ai/channels)
 - [Docs index llms.txt](https://docs.openclaw.ai/llms.txt)
 
