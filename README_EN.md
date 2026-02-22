@@ -380,6 +380,35 @@ openclaw agents add qa-engineer
 openclaw agents add ops-engineer
 ```
 
+**Game team roles (game/)** — Terminology:
+
+- **Game Master** （游戏主持人）：Facilitator and orchestrator; runs sessions, holds vision, coordinates Game Designer and Game Architect.
+- **Game Designer** （游戏策划）：Industry-standard role for core design — gameplay, rules, systems, levels, narrative. Widely used in hiring and international teams.
+- **Game Developer**（游戏开发）：此处指**程序开发**角色（写代码的程序员），而非泛指策划、美术、程序等所有岗位。In this doc, “game development” means programming/coding (程序开发), not the entire game team.
+- **Game Architect** （游戏架构师）：Senior role for overall game architecture and system design; technical and top-level.
+
+**Add all 4 Game agents with the wizard**
+
+Fragment `agentId` values are valid CLI arguments:
+
+```bash
+openclaw agents add game-master
+openclaw agents add game-designer
+openclaw agents add game-architect
+openclaw agents add game-developer
+```
+
+Merge `agents`, `bindings`, and `tools.agentToAgent` from `config/openclaw-game-fragment.json` into `~/.openclaw/openclaw.json`. To use a shared workspace, set `workspace` to e.g. `~/.openclaw/workspace-game/<agentId>`. Copy or link this repo’s `game/` role templates:
+
+```bash
+cp -r /path/to/openclaw-agents/game/1-game-master/*    ~/.openclaw/workspace-game/game-master/
+cp -r /path/to/openclaw-agents/game/2-game-designer/*  ~/.openclaw/workspace-game/game-designer/
+cp -r /path/to/openclaw-agents/game/3-game-architect/* ~/.openclaw/workspace-game/game-architect/
+cp -r /path/to/openclaw-agents/game/4-game-developer/* ~/.openclaw/workspace-game/game-developer/
+```
+
+---
+
 The wizard creates `~/.openclaw/workspace-<agentId>`, `~/.openclaw/agents/<agentId>/agent`, and sessions. To use a shared `workspace-it` dir, enter `~/.openclaw/workspace-it/<agentId>` in the wizard or set `workspace` in config to match the fragment.
 
 **2. Merge fragment into openclaw.json**
